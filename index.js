@@ -3,11 +3,14 @@ const express = require("express");
 
 const connectMongo = require("./src/config/mongo");
 const redis = require("./src/config/redis");
+const seedPlans = require("./src/utils/seedPlans");
+const authRoutes = require("./src/routes/auth.routes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use("/auth", authRoutes);
 
 /**
  * Health endpoint (unchanged)
@@ -29,6 +32,7 @@ app.get("/", (req, res) => {
  */
 const startServer = async () => {
   await connectMongo();
+  await seedPlans();
 
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
