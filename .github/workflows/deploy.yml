@@ -18,9 +18,9 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1   # 🔒 hard-coded for safety
+          aws-region: ap-south-1   # hard-coded to avoid ambiguity
 
-      # ✅ FIXED verification step (SAFE)
+      # ✅ SAFE verification (will NOT fail)
       - name: Verify AWS identity & region
         run: |
           aws sts get-caller-identity
@@ -31,6 +31,7 @@ jobs:
         run: |
           set -e
 
+          # 1️⃣ Send SSM command
           COMMAND_ID=$(aws ssm send-command \
             --region ap-south-1 \
             --document-name "AWS-RunShellScript" \
@@ -50,8 +51,10 @@ jobs:
 
           echo "SSM Command ID: $COMMAND_ID"
 
+          # 2️⃣ Allow SSM to register invocations
           sleep 5
 
+          # 3️⃣ Fetch targeted instances
           TARGETS=$(aws ssm list-command-invocations \
             --region ap-south-1 \
             --command-id "$COMMAND_ID" \
@@ -63,8 +66,15 @@ jobs:
             exit 1
           fi
 
-          aws ssm wait command-executed \
-            --region ap-south-1 \
-            --command-id "$COMMAND_ID"
+          echo "Targets: $TARGETS"
+
+          # 4️⃣ Wait for execution PER INSTANCE (REQUIRED)
+          for INSTANCE_ID in $TARGETS; do
+            echo "⏳ Waiting for command to finish on $INSTANCE_ID"
+            aws ssm wait command-executed \
+              --region ap-south-1 \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID"
+          done
 
           echo "✅ Deployment executed successfully on: $TARGETS"
