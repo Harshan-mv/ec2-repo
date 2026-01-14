@@ -25,13 +25,14 @@ jobs:
           aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:App,Values=node-app" \
-            --comment "Deploy Node app via SSM" \
+            --comment "Deploy Node app via SSM (PM2 safe)" \
             --parameters '{
               "commands": [
                 "cd /home/ec2-user/node-app",
                 "git pull origin main",
-                "npm install --production",
-                "pm2 restart node-app || pm2 start index.js --name node-app"
+                "npm install --omit=dev",
+                "sudo -u ec2-user env HOME=/home/ec2-user pm2 restart node-app || sudo -u ec2-user env HOME=/home/ec2-user pm2 start index.js --name node-app",
+                "sudo -u ec2-user env HOME=/home/ec2-user pm2 save"
               ]
             }' \
             --timeout-seconds 600
