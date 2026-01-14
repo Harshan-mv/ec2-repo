@@ -20,14 +20,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1   # hard-coded to avoid ambiguity
 
-      # ✅ SAFE verification (will NOT fail)
+      # ✅ SAFE verification (never fails)
       - name: Verify AWS identity & region
         run: |
           aws sts get-caller-identity
           echo "AWS_REGION=$AWS_REGION"
           echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
 
-      - name: Deploy via AWS SSM (validated)
+      - name: Deploy via AWS SSM (hardened & validated)
         run: |
           set -e
 
@@ -36,11 +36,12 @@ jobs:
             --region ap-south-1 \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:aws:autoscaling:groupName,Values=node-app-asg" \
-            --comment "Deploy Node app via SSM (PM2 safe)" \
+            --comment "Deploy Node app via SSM (PM2 safe, git hardened)" \
             --parameters '{
               "commands": [
                 "cd /home/ec2-user/node-app",
-                "git pull origin main",
+                "git fetch origin",
+                "git reset --hard origin/main",
                 "npm install --omit=dev",
                 "sudo -u ec2-user env HOME=/home/ec2-user pm2 restart node-app || sudo -u ec2-user env HOME=/home/ec2-user pm2 start index.js --name node-app",
                 "sudo -u ec2-user env HOME=/home/ec2-user pm2 save"
