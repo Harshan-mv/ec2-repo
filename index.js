@@ -24,7 +24,7 @@ app.get("/health", (req, res) => {
  */
 app.get("/", (req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.send("Hello from AWS EC2 🚀 Node.js is running on https try added ssm!");
+  res.send("Hello from AWS EC2 🚀 Node.js is running on https try added ssm working safe!");
 });
 
 /**
