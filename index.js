@@ -13,18 +13,35 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 
 /**
- * Health endpoint (unchanged)
+ * Health endpoint (used by ALB / ASG)
  */
 app.get("/health", (req, res) => {
-  res.status(200).send("OK");
+  res
+    .status(200)
+    .set({
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    })
+    .send("OK");
 });
 
 /**
- * Root endpoint (unchanged)
+ * Root endpoint (NO CACHE – HARDENED)
  */
 app.get("/", (req, res) => {
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.send("Hello from AWS EC2 🚀 Node.js 123 f** is running on https try added ssm working all safe !");
+  res.set({
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Surrogate-Control": "no-store",
+  });
+
+  res.send(
+    "Hello from AWS EC2 🚀 Node.js 123 f** is running on https try added ssm working all safe !"
+  );
 });
 
 /**
