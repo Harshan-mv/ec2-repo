@@ -18,13 +18,21 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ap-south-1   # 🔒 hard-coded for safety
 
-      - name: Deploy via AWS SSM
+      - name: Verify AWS identity & region
         run: |
-          aws ssm send-command \
+          aws sts get-caller-identity
+          aws configure get region
+
+      - name: Deploy via AWS SSM (validated)
+        run: |
+          set -e
+
+          COMMAND_ID=$(aws ssm send-command \
+            --region ap-south-1 \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:App,Values=node-app" \
+            --targets "Key=tag:aws:autoscaling:groupName,Values=node-app-asg" \
             --comment "Deploy Node app via SSM (PM2 safe)" \
             --parameters '{
               "commands": [
@@ -35,4 +43,26 @@ jobs:
                 "sudo -u ec2-user env HOME=/home/ec2-user pm2 save"
               ]
             }' \
-            --timeout-seconds 600
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          sleep 5
+
+          TARGETS=$(aws ssm list-command-invocations \
+            --region ap-south-1 \
+            --command-id "$COMMAND_ID" \
+            --query "CommandInvocations[].InstanceId" \
+            --output text)
+
+          if [ -z "$TARGETS" ]; then
+            echo "❌ ERROR: No instances were targeted by SSM"
+            exit 1
+          fi
+
+          aws ssm wait command-executed \
+            --region ap-south-1 \
+            --command-id "$COMMAND_ID"
+
+          echo "✅ Deployment executed successfully on: $TARGETS"
