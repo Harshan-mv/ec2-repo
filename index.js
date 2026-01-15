@@ -1,8 +1,9 @@
 require("dotenv").config();
+
 const express = require("express");
 
 const connectMongo = require("./src/config/mongo");
-const redis = require("./src/config/redis");
+const connectRedis = require("./src/config/redis");
 const seedPlans = require("./src/utils/seedPlans");
 const authRoutes = require("./src/routes/auth.routes");
 
@@ -13,48 +14,55 @@ app.use(express.json());
 app.use("/auth", authRoutes);
 
 /**
- * Health endpoint (used by ALB / ASG)
+ * Health endpoint (ALB / ASG safe)
  */
 app.get("/health", (req, res) => {
-  res
-    .status(200)
-    .set({
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      "Pragma": "no-cache",
-      "Expires": "0",
-    })
-    .send("OK");
+  res.status(200).send("OK");
 });
 
 /**
- * Root endpoint (NO CACHE – HARDENED)
+ * Root endpoint (no cache)
  */
 app.get("/", (req, res) => {
-  res.set({
-    "Content-Type": "text/plain; charset=utf-8",
-    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-    "Pragma": "no-cache",
-    "Expires": "0",
-    "Surrogate-Control": "no-store",
-  });
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
 
-  res.send(
-    "Hello from AWS EC2 🚀 Node.js 123 f** is running on https try added ssm working all safe !"
-  );
+  res.send("Hello from AWS EC2 🚀 Node.js is running on HTTPS (ASG-safe)");
 });
 
 /**
- * Start server AFTER DB connection
+ * Start server FIRST (critical for ASG)
  */
-const startServer = async () => {
-  await connectMongo();
-  await seedPlans();
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log("CI/CD test deployment - health endpoint enabled");
-  });
-};
+  /**
+   * Mongo init (NON-BLOCKING)
+   */
+  if (!process.env.MONGO_URI) {
+    console.error("❌ MONGO_URI is missing — skipping Mongo connection");
+  } else {
+    connectMongo()
+      .then(() => {
+        console.log("✅ MongoDB connected");
+        return seedPlans();
+      })
+      .then(() => console.log("✅ Seed completed"))
+      .catch(err => {
+        console.error("❌ Mongo init failed:", err.message);
+      });
+  }
 
-startServer();
+  /**
+   * Redis init (NON-BLOCKING)
+   */
+  if (!process.env.REDIS_URL) {
+    console.warn("⚠️ REDIS_URL not set — Redis disabled");
+  } else {
+    connectRedis()
+      .then(() => console.log("✅ Redis connected"))
+      .catch(err => console.error("❌ Redis failed:", err.message));
+  }
+});
